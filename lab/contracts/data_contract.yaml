@@ -4,10 +4,10 @@
 
 version: "1.0"
 dataset: "kb_chunk_export"
-owner_team: "Group XX"
-owner_contact: ""
+owner_team: "Data Engineering Team - Group 3"
+owner_contact: "group3-data-eng@lab.edu"
 last_updated: "2026-04-15"
-updated_by: "Ngo Anh Tu"
+updated_by: "Member 3 (M3)"
 
 schema_cleaned:
   chunk_id:

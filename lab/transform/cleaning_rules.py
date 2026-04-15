@@ -3,6 +3,12 @@ Cleaning rules — raw export → cleaned rows + quarantine.
 
 Baseline gồm các failure mode mở rộng (allowlist doc_id, parse ngày, HR stale version).
 Sinh viên thêm ≥3 rule mới: mỗi rule phải ghi `metric_impact` (xem README — chống trivial).
+
+Sprint 2 Extensions by Member 2 (M2):
+- Rule 7: BOM/Special Character Removal (metric_impact: giảm encoding errors, cải thiện embedding quality)
+- Rule 8: Text Length Validation (metric_impact: tăng retrieval precision, giảm noise)
+- Rule 9: Font/Character Normalization (metric_impact: cải thiện search/matching accuracy)
+- Rule 10: Metadata Consistency Check (metric_impact: phát hiện data corruption sớm)
 """
 
 from __future__ import annotations
@@ -10,6 +16,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -26,9 +33,78 @@ ALLOWED_DOC_IDS = frozenset(
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DMY_SLASH = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
 
+# Sprint 2 - M2: Constants for new rules
+MAX_CHUNK_LENGTH = 500  # Maximum reasonable chunk length
+MIN_CHUNK_LENGTH = 8    # Minimum chunk length (aligned with expectations)
+
 
 def _norm_text(s: str) -> str:
     return " ".join((s or "").strip().split()).lower()
+
+
+def _remove_bom_and_special_chars(text: str) -> str:
+    """
+    Rule 7: BOM/Special Character Removal
+    
+    Metric Impact: Giảm encoding errors, cải thiện embedding quality
+    - Loại bỏ BOM (Byte Order Mark) \ufeff
+    - Loại bỏ các ký tự control characters không nhìn thấy
+    - Normalize unicode về dạng chuẩn NFC
+    """
+    if not text:
+        return text
+    
+    # Remove BOM
+    text = text.replace('\ufeff', '')
+    
+    # Remove other common invisible characters
+    text = text.replace('\u200b', '')  # Zero-width space
+    text = text.replace('\u200c', '')  # Zero-width non-joiner
+    text = text.replace('\u200d', '')  # Zero-width joiner
+    text = text.replace('\ufeff', '')  # BOM
+    
+    # Normalize unicode to NFC (canonical composition)
+    text = unicodedata.normalize('NFC', text)
+    
+    # Remove control characters except newline, tab, carriage return
+    text = ''.join(char for char in text if unicodedata.category(char)[0] != 'C' or char in '\n\t\r')
+    
+    return text.strip()
+
+
+def _normalize_font_and_punctuation(text: str) -> str:
+    """
+    Rule 9: Font/Character Normalization
+    
+    Metric Impact: Cải thiện search/matching accuracy
+    - Convert full-width characters → half-width (ASCII)
+    - Normalize Vietnamese diacritics
+    - Standardize punctuation
+    """
+    if not text:
+        return text
+    
+    # Normalize to NFKC (compatibility composition) - converts full-width to half-width
+    text = unicodedata.normalize('NFKC', text)
+    
+    # Standardize common punctuation variations
+    replacements = {
+        '"': '"',  # Smart quotes to straight quotes
+        '"': '"',
+        ''': "'",
+        ''': "'",
+        '…': '...',
+        '–': '-',  # En dash to hyphen
+        '—': '-',  # Em dash to hyphen
+    }
+    
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    # Normalize multiple spaces to single space
+    text = ' '.join(text.split())
+    
+    return text.strip()
 
 
 def _stable_chunk_id(doc_id: str, chunk_text: str, seq: int) -> str:
@@ -77,6 +153,12 @@ def clean_rows(
     4) Quarantine: chunk_text rỗng hoặc effective_date rỗng sau chuẩn hoá.
     5) Loại trùng nội dung chunk_text (giữ bản đầu).
     6) Fix stale refund: policy_refund_v4 chứa '14 ngày làm việc' → 7 ngày.
+    
+    Sprint 2 Extensions (M2):
+    7) Rule: BOM/Special Character Removal - loại bỏ BOM và ký tự đặc biệt
+    8) Rule: Text Length Validation - quarantine nếu chunk quá ngắn (<8) hoặc quá dài (>500)
+    9) Rule: Font/Character Normalization - chuẩn hóa full-width → half-width, punctuation
+    10) Rule: Metadata Consistency Check - quarantine nếu exported_at < effective_date (data corruption)
     """
     quarantine: List[Dict[str, Any]] = []
     seen_text: set[str] = set()
@@ -115,11 +197,60 @@ def clean_rows(
             quarantine.append({**raw, "reason": "missing_chunk_text"})
             continue
 
+        # Sprint 2 - Rule 7: BOM/Special Character Removal
+        text = _remove_bom_and_special_chars(text)
+        
+        # Sprint 2 - Rule 9: Font/Character Normalization
+        text = _normalize_font_and_punctuation(text)
+        
+        # Re-check after cleaning
+        if not text:
+            quarantine.append({**raw, "reason": "empty_after_cleaning"})
+            continue
+        
+        # Sprint 2 - Rule 8: Text Length Validation
+        text_len = len(text)
+        if text_len < MIN_CHUNK_LENGTH:
+            quarantine.append({
+                **raw,
+                "reason": "chunk_too_short",
+                "chunk_length": text_len,
+                "min_required": MIN_CHUNK_LENGTH
+            })
+            continue
+        
+        if text_len > MAX_CHUNK_LENGTH:
+            quarantine.append({
+                **raw,
+                "reason": "chunk_too_long",
+                "chunk_length": text_len,
+                "max_allowed": MAX_CHUNK_LENGTH
+            })
+            continue
+
         key = _norm_text(text)
         if key in seen_text:
             quarantine.append({**raw, "reason": "duplicate_chunk_text"})
             continue
         seen_text.add(key)
+
+        # Sprint 2 - Rule 10: Metadata Consistency Check
+        # exported_at không được trước effective_date (data corruption indicator)
+        if exported_at and eff_norm:
+            try:
+                # Extract date part from exported_at (format: 2026-04-10T08:00:00)
+                exported_date = exported_at.split('T')[0] if 'T' in exported_at else exported_at[:10]
+                if exported_date < eff_norm:
+                    quarantine.append({
+                        **raw,
+                        "reason": "metadata_inconsistency_exported_before_effective",
+                        "exported_at": exported_at,
+                        "effective_date": eff_norm
+                    })
+                    continue
+            except Exception:
+                # If parsing fails, log but don't quarantine (non-critical)
+                pass
 
         fixed_text = text
         if apply_refund_window_fix and doc_id == "policy_refund_v4":
