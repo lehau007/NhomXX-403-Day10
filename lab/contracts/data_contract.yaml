@@ -1,9 +1,13 @@
 # Data contract — Lab Day 10 (tiếp nối artifact CS + IT Helpdesk)
 # Sinh viên bổ sung owner, SLA freshness, và nguồn canonical.
+# Sprint 1 completed by Member 3 (AI/Embed Engineer)
 
 version: "1.0"
 dataset: "kb_chunk_export"
-owner_team: "Data Engineering Team - Member 1"
+owner_team: "Data Engineering Team - Group 3"
+owner_contact: "group3-data-eng@lab.edu"
+last_updated: "2026-04-15"
+updated_by: "Member 3 (M3)"
 
 schema_cleaned:
   chunk_id:
@@ -37,6 +41,18 @@ freshness:
   measured_at: "publish"  # ingest | cleaned | publish
   sla_hours: 24
   alert_channel: "data-quality-alerts"
+  measurement_points:
+    - stage: "ingest"
+      description: "Timestamp khi raw data được đọc vào pipeline"
+      metric: "raw_ingested_at"
+    - stage: "cleaned"
+      description: "Timestamp khi data đã qua cleaning và validation"
+      metric: "cleaned_at"
+    - stage: "publish"
+      description: "Timestamp khi data được upsert vào Chroma vector store"
+      metric: "published_at"
+  sla_definition: "Data phải được publish vào vector store trong vòng 24 giờ kể từ exported_at"
+  breach_action: "Alert qua data-quality-alerts channel, halt pipeline nếu > 48 giờ"
 
 canonical_sources:
   - path: "data/docs/policy_refund_v4.txt"
@@ -58,3 +74,59 @@ allowed_doc_ids:
 # Merit/Distinction: có thể đưa cutoff versioning vào env và tham chiếu ở đây (tránh hard-code trong code).
 policy_versioning:
   hr_leave_min_effective_date: "2026-01-01"
+
+# Embedding configuration (Sprint 1 - M3)
+embedding:
+  model: "all-MiniLM-L6-v2"  # Default SentenceTransformer model
+  model_provider: "sentence-transformers"
+  vector_dimension: 384
+  chunk_id_strategy: "hash"  # SHA256 hash of doc_id|chunk_text|seq
+  chunk_id_format: "{doc_id}_{seq}_{hash16}"
+  idempotency_guarantee: "Cùng chunk_text + doc_id + seq → cùng chunk_id → upsert idempotent"
+  prune_strategy: "snapshot"  # Xóa chunk_id không còn trong cleaned run mới
+  vector_store:
+    type: "chromadb"
+    path: "./chroma_db"  # Configurable via CHROMA_DB_PATH env
+    collection: "day10_kb"  # Configurable via CHROMA_COLLECTION env
+    persistence: "local"
+    backup_strategy: "Không commit chroma_db vào git, chỉ commit manifest"
+
+# Data lineage (Sprint 1 - M3)
+lineage:
+  upstream:
+    - system: "Policy Management System"
+      export_format: "CSV"
+      export_frequency: "Daily batch"
+      last_export: "2026-04-10T08:00:00"
+  downstream:
+    - system: "RAG Retrieval Service"
+      consumption_method: "Chroma vector search"
+      query_pattern: "Semantic similarity search với top-k=3"
+      consumers:
+        - "Customer Support Chatbot"
+        - "Internal Knowledge Portal"
+        - "Compliance Audit Tool"
+
+# SLA & Monitoring (Sprint 1 - M3)
+sla:
+  availability: "99.5%"
+  data_freshness: "24 hours"
+  retrieval_latency_p95: "200ms"
+  embedding_success_rate: "99%"
+  
+monitoring_metrics:
+  - metric: "raw_records"
+    description: "Số dòng trong raw CSV"
+    alert_threshold: "< 5 (quá ít data)"
+  - metric: "cleaned_records"
+    description: "Số dòng sau cleaning"
+    alert_threshold: "< 50% of raw_records (quá nhiều lỗi)"
+  - metric: "quarantine_records"
+    description: "Số dòng bị quarantine"
+    alert_threshold: "> 50% of raw_records (data quality issue)"
+  - metric: "embed_upsert_count"
+    description: "Số vectors được upsert vào Chroma"
+    alert_threshold: "!= cleaned_records (embedding failure)"
+  - metric: "embed_prune_removed"
+    description: "Số vectors cũ bị xóa (không còn trong cleaned)"
+    alert_threshold: "> 80% of previous vectors (major data change)"
