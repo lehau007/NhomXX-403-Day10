@@ -4,12 +4,12 @@
 **Thành viên:**
 | Tên | Vai trò (Day 10) | Email |
 |-----|------------------|-------|
-| Member 1 | Ingestion / Monitoring / Ops | m1@example.com |
-| Member 2 | Cleaning & Quality Owner | m2@example.com |
-| Member 3 | Embed & Idempotency Owner | m3@example.com |
+| Hậu | Ingestion / Monitoring / Ops ||
+| Hào | Cleaning & Quality Owner ||
+| Tú | Embed & Idempotency Owner ||
 
 **Ngày nộp:** 2026-04-15  
-**Repo:** VinUni/lab10/cheating  
+**Repo:** VinUni/lab10/
 **Độ dài khuyến nghị:** 600–1000 từ
 
 ---
@@ -69,5 +69,11 @@ Dữ liệu sau khi embed vào `day10_kb` đã sẵn sàng để phục vụ cho
 ---
 
 ## 6. Rủi ro còn lại & việc chưa làm
-
-- …
+- **Thiếu cơ chế Auto-rollback:** Hiện tại nếu pipeline chạy thành công nhưng dữ liệu embed có chất lượng retrieval thấp (đo qua eval), hệ
+thống vẫn chưa tự động quay lại (rollback) phiên bản Vector DB trước đó mà cần sự can thiệp thủ công của Ops.
+- **Xử lý Schema Evolution:** Các quy tắc làm sạch (Cleaning Rules) hiện tại đang được hard-code. Nếu cấu trúc file CSV đầu vào thay đổi
+(thêm/bớt cột), pipeline có thể bị lỗi nghiêm trọng. Cần chuyển sang cơ chế cấu trúc hóa qua cấu hình (configuration-driven).
+- **Giám sát Drift:** Mới chỉ đo được Freshness (độ tươi) và Schema, chưa đo được Data Drift (sự thay đổi phân phối nội dung) vốn rất quan
+trọng để đảm bảo Agent không bị "hallucination" theo thời gian.
+- **Tích hợp CI/CD:** Quy trình kiểm tra `instructor_quick_check.py` và `grading_run.py` hiện tại đang chạy thủ công. Cần tích hợp vào GitHub
+Actions để tự động hóa việc chấm điểm và kiểm tra chất lượng mỗi khi có commit mới.

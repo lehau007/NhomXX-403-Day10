@@ -1,6 +1,6 @@
 # Quality Report — Lab Day 10 (Nhóm 3)
 
-**Người viết:** Member 2 (M2) - Data Quality Engineer  
+**Người viết:** Hào (M2) - Data Quality Engineer  
 **Sprint:** 3 - Inject Corruption & Before/After  
 **Ngày:** 2026-04-15  
 **run_id (baseline):** sprint3-baseline  

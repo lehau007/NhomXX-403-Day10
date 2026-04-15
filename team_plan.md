@@ -8,9 +8,9 @@ Tài liệu này cung cấp kế hoạch chi tiết, phân công nhiệm vụ, t
 
 | Thành viên | Vai trò | Trách nhiệm chính |
 |---|---|---|
-| **Member 1 (M1)** | Data Engineer (Ingestion & Ops) | Ingestion pipeline, Data contract (sources), Monitoring (freshness), Final Integration (run bash). |
-| **Member 2 (M2)** | Data Quality Engineer | Cleaning rules, Expectations, Quarantine logic, Data Contract (schema), Quality Report. |
-| **Member 3 (M3)** | AI/Embed Engineer | Idempotent Embedding (Chroma), Retrieval Evaluation, Inject Corruption, Runbook, Architecture Docs. |
+| **Hậu (M1)** | Data Engineer (Ingestion & Ops) | Ingestion pipeline, Data contract (sources), Monitoring (freshness), Final Integration (run bash). |
+| **Hào (M2)** | Data Quality Engineer | Cleaning rules, Expectations, Quarantine logic, Data Contract (schema), Quality Report. |
+| **Tú (M3)** | AI/Embed Engineer | Idempotent Embedding (Chroma), Retrieval Evaluation, Inject Corruption, Runbook, Architecture Docs. |
 
 ---
 
